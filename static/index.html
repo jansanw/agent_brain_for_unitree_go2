@@ -584,22 +584,34 @@
         <div class="tab-content">
             <!-- Control Tab -->
             <div v-show="activeTab === 'control'">
-                <div class="joystick-container" :class="{ 'disabled-overlay': !connected }">
-                    <div class="joystick-wrapper">
-                        <div class="joystick" ref="moveJoystick" @touchstart="onJoystickStart" @touchmove="onJoystickMove" @touchend="onJoystickEnd('move')">
-                            <div class="joystick-inner" :class="{ active: joystickActive === 'move' }"></div>
-                        </div>
-                        <div class="label">移动 (前后/左右)</div>
-                    </div>
-                    <div class="joystick-wrapper">
-                        <div class="joystick" ref="turnJoystick" @touchstart="onJoystickStart" @touchmove="onJoystickMove" @touchend="onJoystickEnd('turn')">
-                            <div class="joystick-inner" :class="{ active: joystickActive === 'turn' }"></div>
-                        </div>
-                        <div class="label">转向 (左右)</div>
-                    </div>
+                <!-- Mode Switch -->
+                <div style="display: flex; justify-content: center; margin-bottom: 16px;">
+                    <button @click="joystickMode = 'single'" :style="{
+                        padding: '8px 20px',
+                        borderRadius: '8px 0 0 8px',
+                        border: 'none',
+                        background: joystickMode === 'single' ? 'var(--primary)' : '#2a2a4a',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: '13px'
+                    }">
+                        <i class="fas fa-hand-pointer"></i> 单摇杆
+                    </button>
+                    <button @click="joystickMode = 'dual'" :style="{
+                        padding: '8px 20px',
+                        borderRadius: '0 8px 8px 0',
+                        border: 'none',
+                        background: joystickMode === 'dual' ? 'var(--primary)' : '#2a2a4a',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: '13px'
+                    }">
+                        <i class="fas fa-hands"></i> 双摇杆
+                    </button>
                 </div>
                 
-                <div class="quick-actions">
+                <!-- Quick Actions (moved to top) -->
+                <div class="quick-actions" :class="{ 'disabled-overlay': !connected }" style="position: relative;">
                     <button class="action-btn" @click="doAction('stance', 'stand_up')" :disabled="!connected">
                         <i class="fas fa-arrow-up"></i>站起
                     </button>
@@ -624,6 +636,33 @@
                     <button class="action-btn" @click="doAction('trick', 'stretch')" :disabled="!connected">
                         <i class="fas fa-expand"></i>伸展
                     </button>
+                </div>
+                
+                <!-- Joystick Section -->
+                <div class="joystick-container" :class="{ 'disabled-overlay': !connected }" style="position: relative; margin-top: 20px;">
+                    <!-- Single Joystick Mode -->
+                    <div v-if="joystickMode === 'single'" class="joystick-wrapper">
+                        <div class="joystick" ref="singleJoystick" @touchstart="onJoystickStart" @touchmove="onJoystickMove" @touchend="onJoystickEnd('single')">
+                            <div class="joystick-inner" :class="{ active: joystickActive === 'single' }"></div>
+                        </div>
+                        <div class="label">前后移动 / 左右转向</div>
+                    </div>
+                    
+                    <!-- Dual Joystick Mode -->
+                    <template v-else>
+                        <div class="joystick-wrapper">
+                            <div class="joystick" ref="moveJoystick" @touchstart="onJoystickStart" @touchmove="onJoystickMove" @touchend="onJoystickEnd('move')">
+                                <div class="joystick-inner" :class="{ active: joystickActive === 'move' }"></div>
+                            </div>
+                            <div class="label">移动 (前后/左右)</div>
+                        </div>
+                        <div class="joystick-wrapper">
+                            <div class="joystick" ref="turnJoystick" @touchstart="onJoystickStart" @touchmove="onJoystickMove" @touchend="onJoystickEnd('turn')">
+                                <div class="joystick-inner" :class="{ active: joystickActive === 'turn' }"></div>
+                            </div>
+                            <div class="label">转向 (左右)</div>
+                        </div>
+                    </template>
                 </div>
             </div>
             
@@ -789,6 +828,8 @@ const app = createApp({
         const activeTab = ref('chat');
         
         // Joystick
+        const joystickMode = ref('single');  // 'single' or 'dual'
+        const singleJoystick = ref(null);
         const moveJoystick = ref(null);
         const turnJoystick = ref(null);
         const joystickActive = ref(null);
@@ -1083,7 +1124,12 @@ const app = createApp({
             e.preventDefault();
             const touch = e.touches[0];
             const target = e.currentTarget;
-            joystickActive.value = target === moveJoystick.value ? 'move' : 'turn';
+            // 根据当前模式和触摸的摇杆确定活动类型
+            if (joystickMode.value === 'single') {
+                joystickActive.value = 'single';
+            } else {
+                joystickActive.value = target === moveJoystick.value ? 'move' : 'turn';
+            }
             updateJoystick(touch, target);
         }
         
@@ -1125,7 +1171,15 @@ const app = createApp({
             
             const { x, y } = joystickData;
             
-            if (joystickActive.value === 'move') {
+            if (joystickActive.value === 'single') {
+                // 单摇杆模式：y 控制前后移动，x 控制转向
+                if (Math.abs(x) >= 0.1) {
+                    await api.post('/robot/turn', { degrees: -x * 15 });
+                }
+                if (Math.abs(y) >= 0.1) {
+                    await api.post('/robot/move', { x: -y * 0.3, y: 0 });
+                }
+            } else if (joystickActive.value === 'move') {
                 if (Math.abs(x) < 0.1 && Math.abs(y) < 0.1) return;
                 await api.post('/robot/move', { x: -y * 0.3, y: -x * 0.3 });
             } else if (joystickActive.value === 'turn') {
@@ -1142,17 +1196,23 @@ const app = createApp({
             }
             
             // Reset visual
-            const el = type === 'move' ? moveJoystick.value : turnJoystick.value;
+            let el;
+            if (type === 'single') {
+                el = singleJoystick.value;
+            } else if (type === 'move') {
+                el = moveJoystick.value;
+            } else {
+                el = turnJoystick.value;
+            }
             if (el) {
                 el.querySelector('.joystick-inner').style.transform = 'translate(-50%, -50%)';
             }
             
             // Send stop command
-            if (type === 'move') {
+            if (type === 'single' || type === 'move') {
                 api.post('/robot/move', { x: 0, y: 0 }).catch(() => {});
-            } else {
-                api.post('/robot/stop', {}).catch(() => {});
             }
+            api.post('/robot/stop', {}).catch(() => {});
             
             joystickData.x = 0;
             joystickData.y = 0;
@@ -1359,7 +1419,7 @@ const app = createApp({
             // State
             connected, showConnectModal, connecting, connectForm,
             robotState, cameraImage, activeTab,
-            moveJoystick, turnJoystick, joystickActive,
+            joystickMode, singleJoystick, moveJoystick, turnJoystick, joystickActive,
             selectedColor, speedLevel, selectedGait,
             chatMessages, chatInput, chatLoading, chatMessagesEl,
             voiceRunning, voiceLoading,
