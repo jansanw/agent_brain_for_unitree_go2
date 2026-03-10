@@ -1,0 +1,44 @@
+# Core dependencies
+mcp
+mcp[cli]
+git+https://github.com/jrcichra/unitree_webrtc_connect.git@justin
+uvicorn
+starlette
+opencv-python-headless
+numpy
+pillow
+fastapi
+python-dotenv
+httpx
+
+# LLM and LangChain
+langchain-core
+langchain-openai
+openai
+
+# ASR (Speech Recognition)
+# Choose one or more:
+# openai-whisper  # Local Whisper model
+# funasr  # Alibaba FunASR for Chinese
+
+# TTS (Text-to-Speech)
+edge-tts  # Free, good Chinese support
+
+# VAD (Voice Activity Detection)
+webrtcvad-wheels  # Lightweight VAD
+# torch  # Required for Silero VAD (optional, more accurate)
+
+# Audio processing
+scipy  # For audio resampling
+
+# WebSocket server
+websockets
+
+# Optional: CLI
+term-image
+textual
+
+# Optional: Azure TTS
+# azure-cognitiveservices-speech
+
+dashscope

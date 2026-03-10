@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Go2 机器人控制</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/element-plus/2.4.4/index.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/element-plus/2.4.4/index.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/13.0.2/markdown-it.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        :root {
+            --primary: #409eff;
+            --success: #67c23a;
+            --warning: #e6a23c;
+            --danger: #f56c6c;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --text: #eaeaea;
+            --text-muted: #a0a0a0;
+        }
+        
+        html, body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            overflow: hidden;
+        }
+        
+        #app { height: 100%; display: flex; flex-direction: column; }
+        
+        /* Header */
+        .header {
+            background: var(--bg-card);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #2a2a4a;
+            flex-shrink: 0;
+        }
+        .header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .header h1 i { color: var(--primary); }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-badge.connected { background: rgba(103, 194, 58, 0.2); color: var(--success); }
+        .status-badge.disconnected { background: rgba(245, 108, 108, 0.2); color: var(--danger); }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        /* Camera Section */
+        .camera-section {
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+            max-height: 300px;
+        }
+        .camera-section img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .camera-placeholder {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px;
+        }
+        .camera-placeholder i { font-size: 48px; margin-bottom: 12px; display: block; }
+        
+        /* State Bar */
+        .state-bar {
+            background: var(--bg-card);
+            padding: 10px 16px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            font-size: 12px;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        .state-item { text-align: center; }
+        .state-item .label { color: var(--text-muted); margin-bottom: 2px; }
+        .state-item .value { font-weight: 600; font-size: 14px; }
+        .state-item .value.warning { color: var(--warning); }
+        .state-item .value.danger { color: var(--danger); }
+        
+        /* Tabs */
+        .tab-nav {
+            background: var(--bg-card);
+            display: flex;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 13px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        .tab-btn i { margin-right: 6px; }
+        
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        
+        /* Control Tab - Joystick */
+        .joystick-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 20px 0;
+        }
+        .joystick-wrapper { text-align: center; }
+        .joystick-wrapper .label { margin-top: 10px; color: var(--text-muted); font-size: 12px; }
+        
+        .joystick {
+            width: 140px;
+            height: 140px;
+            background: linear-gradient(145deg, #1e2a4a, #0f1729);
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4), inset 0 2px 10px rgba(255,255,255,0.05);
+            touch-action: none;
+        }
+        .joystick-inner {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(145deg, var(--primary), #2a6fc9);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 15px rgba(64, 158, 255, 0.4);
+            transition: box-shadow 0.2s;
+        }
+        .joystick-inner.active {
+            box-shadow: 0 4px 25px rgba(64, 158, 255, 0.8);
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .action-btn {
+            background: var(--bg-card);
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            padding: 16px 8px;
+            color: var(--text);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+        .action-btn i { font-size: 20px; }
+        .action-btn:active { background: var(--primary); transform: scale(0.95); }
+        .action-btn.stop { border-color: var(--danger); color: var(--danger); }
+        .action-btn.stop:active { background: var(--danger); color: #fff; }
+        .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .action-btn:disabled:active { background: var(--bg-card); transform: none; }
+        
+        /* Disabled overlay */
+        .disabled-overlay {
+            position: relative;
+            pointer-events: none;
+        }
+        .disabled-overlay::after {
+            content: '请先连接机器人';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            color: var(--text-muted);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 10;
+        }
+        
+        /* Tricks Tab */
+        .trick-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .trick-btn {
+            background: var(--bg-card);
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            padding: 20px 12px;
+            color: var(--text);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .trick-btn i { font-size: 24px; margin-bottom: 8px; display: block; }
+        .trick-btn:active { background: var(--primary); transform: scale(0.95); }
+        
+        /* Settings Tab */
+        .setting-group {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .setting-group h3 { font-size: 14px; margin-bottom: 12px; color: var(--text-muted); }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+        .color-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .color-btn.active { border-color: #fff; }
+        .color-btn:active { transform: scale(0.9); }
+        
+        /* Chat Tab */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+        .message {
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 85%;
+        }
+        .message.user {
+            background: var(--primary);
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+        .message.assistant {
+            background: #2a2a4a;
+            border-bottom-left-radius: 4px;
+        }
+        .message .content { font-size: 14px; line-height: 1.5; }
+        .message .content pre {
+            background: #1a1a2e;
+            padding: 8px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        .message .content code {
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        
+        .chat-input-area {
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input-area input {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid #2a2a4a;
+            border-radius: 24px;
+            padding: 12px 18px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+        }
+        .chat-input-area input:focus { border-color: var(--primary); }
+        .chat-input-area button {
+            background: var(--primary);
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            color: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .chat-input-area button:active { transform: scale(0.9); }
+        .chat-input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .chat-input-area button.mic-btn {
+            background: var(--danger);
+        }
+        .chat-input-area button.mic-btn.recording {
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(245, 108, 108, 0); }
+        }
+        
+        /* Recording Overlay */
+        .recording-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+        .recording-overlay .mic-icon {
+            font-size: 80px;
+            color: var(--danger);
+            animation: pulse 1s infinite;
+            margin-bottom: 20px;
+        }
+        .recording-overlay .countdown {
+            font-size: 48px;
+            font-weight: bold;
+            color: var(--text);
+        }
+        .recording-overlay .hint {
+            font-size: 16px;
+            color: var(--text-muted);
+            margin-top: 10px;
+        }
+        
+        /* Connect Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+        }
+        .modal {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            width: 100%;
+            max-width: 360px;
+        }
+        .modal h2 { font-size: 18px; margin-bottom: 20px; text-align: center; }
+        .modal input {
+            width: 100%;
+            background: var(--bg-dark);
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            padding: 12px 14px;
+            color: var(--text);
+            font-size: 14px;
+            margin-bottom: 12px;
+            outline: none;
+        }
+        .modal input:focus { border-color: var(--primary); }
+        .modal-buttons { display: flex; gap: 12px; margin-top: 20px; }
+        .modal-buttons button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .modal-buttons .btn-cancel {
+            background: #2a2a4a;
+            color: var(--text);
+        }
+        .modal-buttons .btn-connect {
+            background: var(--primary);
+            color: #fff;
+        }
+        .modal-buttons button:disabled { opacity: 0.5; }
+        
+        /* Loading */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--text-muted);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 300;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: toastIn 0.3s ease;
+            pointer-events: auto;
+            max-width: 90vw;
+        }
+        .toast.success { background: rgba(103, 194, 58, 0.95); color: #fff; }
+        .toast.error { background: rgba(245, 108, 108, 0.95); color: #fff; }
+        .toast.warning { background: rgba(230, 162, 60, 0.95); color: #fff; }
+        .toast i { font-size: 16px; }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Responsive */
+        @media (min-width: 768px) {
+            .camera-section { max-height: 400px; }
+            .quick-actions { grid-template-columns: repeat(8, 1fr); }
+            .trick-grid { grid-template-columns: repeat(5, 1fr); }
+        }
+        
+        @media (orientation: landscape) and (max-height: 500px) {
+            .camera-section { min-height: 120px; max-height: 180px; }
+            .state-bar { padding: 6px 16px; }
+            .tab-nav { display: none; }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <!-- Toast Container -->
+    <div class="toast-container">
+        <div v-for="(t, idx) in toasts" :key="idx" class="toast" :class="t.type">
+            <i :class="t.type === 'success' ? 'fas fa-check-circle' : t.type === 'error' ? 'fas fa-times-circle' : 'fas fa-exclamation-circle'"></i>
+            {{ t.message }}
+        </div>
+    </div>
+    
+    <!-- Header -->
+    <header class="header">
+        <h1><i class="fas fa-robot"></i> Go2 控制台</h1>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <!-- Voice Assistant Button -->
+            <button v-if="connected" @click="toggleVoiceAssistant" :disabled="voiceLoading" 
+                :style="{
+                    background: voiceRunning ? 'var(--danger)' : 'var(--success)',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                }">
+                <i :class="voiceLoading ? 'fas fa-spinner fa-spin' : (voiceRunning ? 'fas fa-microphone-slash' : 'fas fa-microphone')"></i>
+                {{ voiceLoading ? '...' : (voiceRunning ? '停止语音' : '语音对话') }}
+            </button>
+            <span class="status-badge" :class="connected ? 'connected' : 'disconnected'" @click="!connected && (showConnectModal = true)" style="cursor: pointer;">
+                {{ connected ? '已连接' : '未连接' }}
+            </span>
+            <button v-if="connected" @click="disconnectRobot" style="background: var(--danger); border: none; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px; cursor: pointer;">
+                <i class="fas fa-unlink"></i> 断开
+            </button>
+            <button v-else @click="showConnectModal = true" style="background: var(--primary); border: none; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px; cursor: pointer;">
+                <i class="fas fa-link"></i> 连接
+            </button>
+        </div>
+    </header>
+    
+    <div class="main-content">
+        <!-- Camera -->
+        <div class="camera-section">
+            <img v-if="cameraImage" :src="'data:image/jpeg;base64,' + cameraImage" alt="Camera">
+            <div v-else class="camera-placeholder">
+                <i class="fas fa-video-slash"></i>
+                <div>摄像头未连接</div>
+            </div>
+        </div>
+        
+        <!-- State Bar -->
+        <div class="state-bar">
+            <div class="state-item">
+                <div class="label">电量</div>
+                <div class="value" :class="{ warning: robotState.battery_pct < 20, danger: robotState.battery_pct < 10 }">
+                    {{ robotState.battery_pct }}%
+                </div>
+            </div>
+            <div class="state-item">
+                <div class="label">电压</div>
+                <div class="value">{{ robotState.battery_v.toFixed(1) }}V</div>
+            </div>
+            <div class="state-item">
+                <div class="label">障碍物</div>
+                <div class="value" :class="{ warning: obstacleDistance > 0 && obstacleDistance < 0.5, danger: obstacleDistance > 0 && obstacleDistance < 0.3 }">
+                    {{ obstacleDistance > 0 ? obstacleDistance.toFixed(2) + 'm' : '-' }}
+                </div>
+            </div>
+            <div class="state-item">
+                <div class="label">姿态</div>
+                <div class="value">{{ gaitName }}</div>
+            </div>
+        </div>
+        
+        <!-- Tabs -->
+        <nav class="tab-nav">
+            <button class="tab-btn" :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'">
+                <i class="fas fa-comment"></i>对话
+            </button>
+            <button class="tab-btn" :class="{ active: activeTab === 'control' }" @click="activeTab = 'control'">
+                <i class="fas fa-gamepad"></i>控制
+            </button>
+            <button class="tab-btn" :class="{ active: activeTab === 'tricks' }" @click="activeTab = 'tricks'">
+                <i class="fas fa-star"></i>动作
+            </button>
+            <button class="tab-btn" :class="{ active: activeTab === 'settings' }" @click="activeTab = 'settings'">
+                <i class="fas fa-cog"></i>设置
+            </button>
+        </nav>
+        
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Control Tab -->
+            <div v-show="activeTab === 'control'">
+                <div class="joystick-container" :class="{ 'disabled-overlay': !connected }">
+                    <div class="joystick-wrapper">
+                        <div class="joystick" ref="moveJoystick" @touchstart="onJoystickStart" @touchmove="onJoystickMove" @touchend="onJoystickEnd('move')">
+                            <div class="joystick-inner" :class="{ active: joystickActive === 'move' }"></div>
+                        </div>
+                        <div class="label">移动 (前后/左右)</div>
+                    </div>
+                    <div class="joystick-wrapper">
+                        <div class="joystick" ref="turnJoystick" @touchstart="onJoystickStart" @touchmove="onJoystickMove" @touchend="onJoystickEnd('turn')">
+                            <div class="joystick-inner" :class="{ active: joystickActive === 'turn' }"></div>
+                        </div>
+                        <div class="label">转向 (左右)</div>
+                    </div>
+                </div>
+                
+                <div class="quick-actions">
+                    <button class="action-btn" @click="doAction('stance', 'stand_up')" :disabled="!connected">
+                        <i class="fas fa-arrow-up"></i>站起
+                    </button>
+                    <button class="action-btn" @click="doAction('stance', 'balance_stand')" :disabled="!connected">
+                        <i class="fas fa-hand-peace"></i>平衡
+                    </button>
+                    <button class="action-btn" @click="doAction('stance', 'sit')" :disabled="!connected">
+                        <i class="fas fa-chair"></i>坐下
+                    </button>
+                    <button class="action-btn" @click="doAction('stance', 'stand_down')" :disabled="!connected">
+                        <i class="fas fa-arrow-down"></i>趴下
+                    </button>
+                    <button class="action-btn stop" @click="doAction('stance', 'stop')" :disabled="!connected">
+                        <i class="fas fa-stop"></i>停止
+                    </button>
+                    <button class="action-btn" @click="doAction('stance', 'recovery_stand')" :disabled="!connected">
+                        <i class="fas fa-redo"></i>恢复
+                    </button>
+                    <button class="action-btn" @click="doAction('trick', 'hello')" :disabled="!connected">
+                        <i class="fas fa-hand-wave"></i>招手
+                    </button>
+                    <button class="action-btn" @click="doAction('trick', 'stretch')" :disabled="!connected">
+                        <i class="fas fa-expand"></i>伸展
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Tricks Tab -->
+            <div v-show="activeTab === 'tricks'" :class="{ 'disabled-overlay': !connected }" style="position: relative;">
+                <div class="trick-grid">
+                    <button class="trick-btn" v-for="trick in tricks" :key="trick.id" @click="doAction('trick', trick.id)" :disabled="!connected">
+                        <i :class="trick.icon"></i>
+                        {{ trick.name }}
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Settings Tab -->
+            <div v-show="activeTab === 'settings'" :class="{ 'disabled-overlay': !connected }" style="position: relative;">
+                <div class="setting-group">
+                    <h3>LED 灯光</h3>
+                    <div class="setting-row">
+                        <span>颜色</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button v-for="color in ledColors" :key="color.name"
+                                class="color-btn" :class="{ active: selectedColor === color.name }"
+                                :style="{ background: color.hex, opacity: connected ? 1 : 0.4 }"
+                                @click="connected && setLedColor(color.name)"
+                                :disabled="!connected">
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="setting-group">
+                    <h3>移动速度</h3>
+                    <div class="setting-row">
+                        <span>速度等级</span>
+                        <div style="display: flex; gap: 10px;">
+                            <button v-for="level in 3" :key="level - 1"
+                                :style="{ 
+                                    padding: '8px 20px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: speedLevel === level - 1 ? 'var(--primary)' : '#2a2a4a',
+                                    color: '#fff',
+                                    cursor: connected ? 'pointer' : 'not-allowed',
+                                    opacity: connected ? 1 : 0.4
+                                }"
+                                @click="connected && setSpeed(level - 1)"
+                                :disabled="!connected">
+                                {{ ['慢速', '正常', '快速'][level - 1] }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="setting-group">
+                    <h3>步态模式</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <button v-for="gait in gaits" :key="gait.id"
+                            :style="{
+                                padding: '8px 14px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: selectedGait === gait.id ? 'var(--primary)' : '#2a2a4a',
+                                color: '#fff',
+                                cursor: connected ? 'pointer' : 'not-allowed',
+                                fontSize: '13px',
+                                opacity: connected ? 1 : 0.4
+                            }"
+                            @click="connected && setGait(gait.id)"
+                            :disabled="!connected">
+                            {{ gait.name }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chat Tab -->
+            <div v-show="activeTab === 'chat'" class="chat-container">
+                <div class="chat-messages" ref="chatMessagesEl">
+                    <div v-for="(msg, idx) in chatMessages" :key="idx" class="message" :class="msg.role">
+                        <div class="content" v-html="renderMarkdown(msg.content)"></div>
+                    </div>
+                    <div v-if="chatLoading" class="message assistant">
+                        <div class="content"><i class="loading-spinner"></i> 思考中...</div>
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <button class="mic-btn" :class="{ recording: isRecording }" @click="toggleRecording" :disabled="!connected || chatLoading">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <input v-model="chatInput" placeholder="输入指令，如：向前走1米" @keyup.enter="sendChat" :disabled="!connected || chatLoading">
+                    <button @click="sendChat" :disabled="!connected || chatLoading || !chatInput.trim()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Recording Overlay -->
+            <div class="recording-overlay" v-if="isRecording">
+                <i class="fas fa-microphone mic-icon"></i>
+                <div class="countdown">{{ recordingCountdown }}s</div>
+                <div class="hint">正在录音，请说话...</div>
+                <button @click="stopRecording" style="margin-top: 30px; padding: 12px 40px; background: var(--primary); border: none; border-radius: 8px; color: #fff; font-size: 16px; cursor: pointer;">
+                    <i class="fas fa-stop"></i> 停止录音
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Connect Modal -->
+    <div class="modal-overlay" v-if="showConnectModal" @click.self="showConnectModal = false">
+        <div class="modal">
+            <h2><i class="fas fa-link"></i> 连接机器人</h2>
+            <input v-model="connectForm.ip" placeholder="IP 地址 (如: 192.168.8.181)">
+            <input v-model="connectForm.serial" placeholder="序列号 (可选)">
+            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14px; margin-bottom: 12px; cursor: pointer;">
+                <input type="checkbox" v-model="connectForm.remote" style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                远程连接
+            </label>
+            <input v-if="connectForm.remote" v-model="connectForm.username" placeholder="用户名">
+            <input v-if="connectForm.remote" v-model="connectForm.password" type="password" placeholder="密码">
+            <div class="modal-buttons">
+                <button class="btn-cancel" @click="showConnectModal = false" :disabled="connecting">取消</button>
+                <button class="btn-connect" @click="connectRobot" :disabled="connecting">
+                    {{ connecting ? '连接中...' : '连接' }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } = Vue;
+const md = window.markdownit();
+
+const app = createApp({
+    setup() {
+        // Connection
+        const connected = ref(false);
+        const showConnectModal = ref(false);
+        const connecting = ref(false);
+        const connectForm = reactive({ ip: '192.168.8.181', serial: '', remote: false, username: '', password: '' });
+        
+        // Robot State
+        const robotState = ref({
+            position: [0, 0, 0],
+            velocity: [0, 0, 0],
+            rpy_rad: [0, 0, 0],
+            body_height: 0,
+            gait: 0,
+            battery_pct: 0,
+            battery_v: 0,
+            range_obstacle: [0, 0, 0, 0]
+        });
+        
+        // Camera
+        const cameraImage = ref(null);
+        
+        // WebSocket
+        let ws = null;
+        let wsReconnectTimer = null;
+        
+        // Tabs
+        const activeTab = ref('chat');
+        
+        // Joystick
+        const moveJoystick = ref(null);
+        const turnJoystick = ref(null);
+        const joystickActive = ref(null);
+        const joystickData = reactive({ x: 0, y: 0, type: null });
+        let joystickTimer = null;
+        
+        // Settings
+        const selectedColor = ref('white');
+        const speedLevel = ref(1);
+        const selectedGait = ref('economic');
+        
+        // Chat
+        const chatMessages = ref([]);
+        const chatInput = ref('');
+        const chatLoading = ref(false);
+        const chatMessagesEl = ref(null);
+        
+        // Voice Assistant
+        const voiceRunning = ref(false);
+        const voiceLoading = ref(false);
+        
+        // Recording
+        const isRecording = ref(false);
+        const recordingCountdown = ref(10);
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let countdownTimer = null;
+        
+        // Toast
+        const toasts = ref([]);
+        let toastId = 0;
+        
+        function showToast(message, type = 'success') {
+            const id = ++toastId;
+            toasts.value.push({ id, message, type });
+            setTimeout(() => {
+                toasts.value = toasts.value.filter(t => t.id !== id);
+            }, 3000);
+        }
+        
+        // Computed
+        const obstacleDistance = computed(() => robotState.value.range_obstacle?.[0] || 0);
+        const gaitName = computed(() => {
+            const names = ['经济', '静态', '小跑', '自由行走', '自由跳跃', '自由避障'];
+            return names[robotState.value.gait] || '-';
+        });
+        
+        // Data
+        const tricks = [
+            { id: 'hello', name: '招手', icon: 'fas fa-hand-wave' },
+            { id: 'stretch', name: '伸展', icon: 'fas fa-expand' },
+            { id: 'wiggle_hips', name: '扭腰', icon: 'fas fa-person' },
+            { id: 'scrape', name: '刨地', icon: 'fas fa-paw' },
+            { id: 'wallow', name: '打滚', icon: 'fas fa-sync' },
+            { id: 'show_heart', name: '比心', icon: 'fas fa-heart' },
+            { id: 'dance1', name: '舞蹈1', icon: 'fas fa-music' },
+            { id: 'dance2', name: '舞蹈2', icon: 'fas fa-compact-disc' },
+            { id: 'front_flip', name: '前空翻', icon: 'fas fa-arrow-up' },
+            { id: 'back_flip', name: '后空翻', icon: 'fas fa-arrow-down' },
+            { id: 'handstand', name: '倒立', icon: 'fas fa-hand-stand' },
+            { id: 'front_jump', name: '前跳', icon: 'fas fa-arrow-up-right' },
+        ];
+        
+        const ledColors = [
+            { name: 'white', hex: '#ffffff' },
+            { name: 'red', hex: '#f56c6c' },
+            { name: 'yellow', hex: '#e6a23c' },
+            { name: 'blue', hex: '#409eff' },
+            { name: 'green', hex: '#67c23a' },
+            { name: 'cyan', hex: '#00d4aa' },
+            { name: 'purple', hex: '#a855f7' },
+        ];
+        
+        const gaits = [
+            { id: 'economic', name: '经济' },
+            { id: 'static', name: '静态' },
+            { id: 'trot_run', name: '小跑' },
+            { id: 'free_walk', name: '自由行走' },
+        ];
+        
+        // API calls
+        const api = {
+            async get(url) {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(res.statusText);
+                return res.json();
+            },
+            async post(url, data) {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || res.statusText);
+                }
+                return res.json();
+            },
+            async delete(url) {
+                const res = await fetch(url, { method: 'DELETE' });
+                return res.json();
+            }
+        };
+        
+        // WebSocket Methods
+        function connectWebSocket() {
+            if (ws) return; // Already connected
+            
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    
+                    if (msg.type === 'connected') {
+                        connected.value = msg.data;
+                    } else if (msg.type === 'state') {
+                        robotState.value = msg.data;
+                        // If we receive valid state data, robot is connected
+                        if (msg.data && msg.data.battery_pct !== undefined) {
+                            connected.value = true;
+                        }
+                    } else if (msg.type === 'camera') {
+                        cameraImage.value = msg.data;
+                        // If we receive camera data, robot is connected
+                        if (msg.data) {
+                            connected.value = true;
+                        }
+                    }
+                } catch (e) {
+                    console.error('WebSocket message error:', e);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket closed');
+                ws = null;
+                // Auto reconnect after 2 seconds
+                if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+                wsReconnectTimer = setTimeout(connectWebSocket, 2000);
+            };
+            
+            ws.onerror = (err) => {
+                console.error('WebSocket error:', err);
+            };
+        }
+        
+        function disconnectWebSocket() {
+            if (wsReconnectTimer) {
+                clearTimeout(wsReconnectTimer);
+                wsReconnectTimer = null;
+            }
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+        
+        // Methods
+        async function connectRobot() {
+            connecting.value = true;
+            try {
+                const res = await api.post('/robot/connect', {
+                    ip: connectForm.ip || null,
+                    serial: connectForm.serial || null,
+                    remote: connectForm.remote,
+                    username: connectForm.username || null,
+                    password: connectForm.password || null
+                });
+                if (res.success) {
+                    showConnectModal.value = false;
+                } else {
+                    alert('连接失败: ' + res.message);
+                }
+            } catch (e) {
+                alert('连接错误: ' + e.message);
+            } finally {
+                connecting.value = false;
+            }
+        }
+        
+        async function disconnectRobot() {
+            try {
+                await api.post('/robot/disconnect', {});
+            } catch (e) {}
+            connected.value = false;
+            cameraImage.value = null;
+        }
+        
+        async function doAction(type, value) {
+            if (!connected.value) {
+                showToast('请先连接机器人', 'warning');
+                return;
+            }
+            try {
+                let res;
+                const actionName = type === 'stance' ? 
+                    { stand_up: '站起', balance_stand: '平衡', sit: '坐下', stand_down: '趴下', stop: '停止', recovery_stand: '恢复' }[value] :
+                    tricks.find(t => t.id === value)?.name || value;
+                
+                if (type === 'stance') {
+                    res = await api.post('/robot/stance', { pose: value });
+                } else if (type === 'trick') {
+                    res = await api.post('/robot/trick', { name: value });
+                }
+                
+                if (res.success) {
+                    showToast(res.message || `${actionName} 成功`, 'success');
+                } else {
+                    showToast(res.message || `${actionName} 失败`, 'error');
+                }
+            } catch (e) {
+                showToast('错误: ' + e.message, 'error');
+            }
+        }
+        
+        async function setLedColor(color) {
+            if (!connected.value) return;
+            try {
+                const res = await api.post('/robot/led', { color, duration: 5 });
+                if (res.success) selectedColor.value = color;
+            } catch (e) {}
+        }
+        
+        async function setSpeed(level) {
+            if (!connected.value) return;
+            try {
+                const res = await api.post('/robot/speed', { level });
+                if (res.success) speedLevel.value = level;
+            } catch (e) {}
+        }
+        
+        async function setGait(gait) {
+            if (!connected.value) return;
+            try {
+                const res = await api.post('/robot/gait', { gait });
+                if (res.success) selectedGait.value = gait;
+            } catch (e) {}
+        }
+        
+        // Voice Assistant
+        async function toggleVoiceAssistant() {
+            if (!connected.value) {
+                showToast('请先连接机器人', 'warning');
+                return;
+            }
+            
+            voiceLoading.value = true;
+            try {
+                if (voiceRunning.value) {
+                    // Stop voice assistant
+                    const res = await api.post('/voice/stop', {});
+                    if (res.success) {
+                        voiceRunning.value = false;
+                        showToast('语音对话已停止', 'success');
+                    } else {
+                        showToast(res.message || '停止失败', 'error');
+                    }
+                } else {
+                    // Start voice assistant
+                    const res = await api.post('/voice/start', {});
+                    if (res.success) {
+                        voiceRunning.value = true;
+                        showToast('语音对话已启动，请说话...', 'success');
+                    } else {
+                        showToast(res.message || '启动失败', 'error');
+                    }
+                }
+            } catch (e) {
+                showToast('错误: ' + e.message, 'error');
+            } finally {
+                voiceLoading.value = false;
+            }
+        }
+        
+        // Joystick
+        function onJoystickStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const target = e.currentTarget;
+            joystickActive.value = target === moveJoystick.value ? 'move' : 'turn';
+            updateJoystick(touch, target);
+        }
+        
+        function onJoystickMove(e) {
+            e.preventDefault();
+            if (!joystickActive.value) return;
+            const touch = e.touches[0];
+            const target = e.currentTarget;
+            updateJoystick(touch, target);
+        }
+        
+        function updateJoystick(touch, target) {
+            const rect = target.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            let dx = touch.clientX - centerX;
+            let dy = touch.clientY - centerY;
+            
+            const maxDist = rect.width / 2 - 30;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > maxDist) {
+                dx = dx / dist * maxDist;
+                dy = dy / dist * maxDist;
+            }
+            
+            const inner = target.querySelector('.joystick-inner');
+            inner.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+            
+            joystickData.x = dx / maxDist;
+            joystickData.y = dy / maxDist;
+            
+            if (!joystickTimer) {
+                joystickTimer = setInterval(sendJoystickCommand, 100);
+            }
+        }
+        
+        async function sendJoystickCommand() {
+            if (!joystickActive.value || !connected.value) return;
+            
+            const { x, y } = joystickData;
+            
+            if (joystickActive.value === 'move') {
+                if (Math.abs(x) < 0.1 && Math.abs(y) < 0.1) return;
+                await api.post('/robot/move', { x: -y * 0.3, y: x * 0.3 });
+            } else if (joystickActive.value === 'turn') {
+                if (Math.abs(x) < 0.1) return;
+                await api.post('/robot/turn', { degrees: -x * 15 });
+            }
+        }
+        
+        function onJoystickEnd(type) {
+            joystickActive.value = null;
+            if (joystickTimer) {
+                clearInterval(joystickTimer);
+                joystickTimer = null;
+            }
+            
+            // Reset visual
+            const el = type === 'move' ? moveJoystick.value : turnJoystick.value;
+            if (el) {
+                el.querySelector('.joystick-inner').style.transform = 'translate(-50%, -50%)';
+            }
+            
+            // Send stop command
+            if (type === 'move') {
+                api.post('/robot/move', { x: 0, y: 0 }).catch(() => {});
+            } else {
+                api.post('/robot/stop', {}).catch(() => {});
+            }
+            
+            joystickData.x = 0;
+            joystickData.y = 0;
+        }
+        
+        // Chat
+        async function sendChat() {
+            if (!chatInput.value.trim() || chatLoading.value) return;
+            
+            const msg = chatInput.value.trim();
+            chatInput.value = '';
+            chatMessages.value.push({ role: 'user', content: msg });
+            chatLoading.value = true;
+            
+            await nextTick();
+            scrollChat();
+            
+            try {
+                const res = await api.post('/chat', { message: msg, image: true });
+                chatMessages.value.push({ role: 'assistant', content: res.response });
+            } catch (e) {
+                chatMessages.value.push({ role: 'assistant', content: '错误: ' + e.message });
+            } finally {
+                chatLoading.value = false;
+                await nextTick();
+                scrollChat();
+            }
+        }
+        
+        function scrollChat() {
+            if (chatMessagesEl.value) {
+                chatMessagesEl.value.scrollTop = chatMessagesEl.value.scrollHeight;
+            }
+        }
+        
+        function renderMarkdown(text) {
+            return md.render(text || '');
+        }
+        
+        // Recording methods
+        let audioContext = null;
+        let mediaStream = null;
+        let scriptProcessor = null;
+        let recordedBuffers = [];
+        
+        async function toggleRecording() {
+            if (isRecording.value) {
+                stopRecording();
+            } else {
+                await startRecording();
+            }
+        }
+        
+        async function startRecording() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+                recordedBuffers = [];
+                
+                scriptProcessor.onaudioprocess = (e) => {
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    recordedBuffers.push(new Float32Array(inputData));
+                };
+                
+                source.connect(scriptProcessor);
+                scriptProcessor.connect(audioContext.destination);
+                
+                isRecording.value = true;
+                recordingCountdown.value = 10;
+                
+                countdownTimer = setInterval(() => {
+                    recordingCountdown.value--;
+                    if (recordingCountdown.value <= 0) {
+                        stopRecording();
+                    }
+                }, 1000);
+                
+            } catch (e) {
+                alert('无法访问麦克风: ' + e.message);
+            }
+        }
+        
+        function stopRecording() {
+            if (scriptProcessor) {
+                scriptProcessor.disconnect();
+                scriptProcessor = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(t => t.stop());
+                mediaStream = null;
+            }
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+            }
+            isRecording.value = false;
+            
+            // Convert to WAV and send
+            if (recordedBuffers.length > 0) {
+                const wavBlob = encodeWAV(recordedBuffers, 16000);
+                sendAudioToASR(wavBlob);
+            }
+        }
+        
+        function encodeWAV(buffers, sampleRate) {
+            // Merge buffers
+            let length = 0;
+            for (const buf of buffers) {
+                length += buf.length;
+            }
+            const merged = new Float32Array(length);
+            let offset = 0;
+            for (const buf of buffers) {
+                merged.set(buf, offset);
+                offset += buf.length;
+            }
+            
+            // Convert to 16-bit PCM
+            const samples = new Int16Array(merged.length);
+            for (let i = 0; i < merged.length; i++) {
+                const s = Math.max(-1, Math.min(1, merged[i]));
+                samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            
+            // Create WAV file
+            const buffer = new ArrayBuffer(44 + samples.length * 2);
+            const view = new DataView(buffer);
+            
+            // RIFF header
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + samples.length * 2, true);
+            writeString(view, 8, 'WAVE');
+            
+            // fmt chunk
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            
+            // data chunk
+            writeString(view, 36, 'data');
+            view.setUint32(40, samples.length * 2, true);
+            
+            // Write samples
+            let idx = 44;
+            for (let i = 0; i < samples.length; i++) {
+                view.setInt16(idx, samples[i], true);
+                idx += 2;
+            }
+            
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+        
+        function writeString(view, offset, str) {
+            for (let i = 0; i < str.length; i++) {
+                view.setUint8(offset + i, str.charCodeAt(i));
+            }
+        }
+        
+        async function sendAudioToASR(blob) {
+            try {
+                const formData = new FormData();
+                formData.append('file', blob, 'recording.wav');
+                
+                const res = await fetch('/asr', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!res.ok) throw new Error(res.statusText);
+                const data = await res.json();
+                
+                if (data.text) {
+                    // Directly send the recognized text
+                    chatInput.value = data.text;
+                    sendChat();
+                }
+            } catch (e) {
+                console.error('ASR error:', e);
+            }
+        }
+        
+        // Lifecycle
+        onMounted(() => {
+            connectWebSocket();
+        });
+        
+        onUnmounted(() => {
+            disconnectWebSocket();
+            if (countdownTimer) clearInterval(countdownTimer);
+        });
+        
+        return {
+            // State
+            connected, showConnectModal, connecting, connectForm,
+            robotState, cameraImage, activeTab,
+            moveJoystick, turnJoystick, joystickActive,
+            selectedColor, speedLevel, selectedGait,
+            chatMessages, chatInput, chatLoading, chatMessagesEl,
+            voiceRunning, voiceLoading,
+            isRecording, recordingCountdown, toasts,
+            
+            // Computed
+            obstacleDistance, gaitName,
+            
+            // Data
+            tricks, ledColors, gaits,
+            
+            // Methods
+            connectRobot, disconnectRobot,
+            doAction, setLedColor, setSpeed, setGait,
+            toggleVoiceAssistant,
+            onJoystickStart, onJoystickMove, onJoystickEnd,
+            sendChat, renderMarkdown, toggleRecording, stopRecording
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
