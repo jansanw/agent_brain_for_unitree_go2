@@ -1127,7 +1127,7 @@ const app = createApp({
             
             if (joystickActive.value === 'move') {
                 if (Math.abs(x) < 0.1 && Math.abs(y) < 0.1) return;
-                await api.post('/robot/move', { x: -y * 0.3, y: x * 0.3 });
+                await api.post('/robot/move', { x: -y * 0.3, y: -x * 0.3 });
             } else if (joystickActive.value === 'turn') {
                 if (Math.abs(x) < 0.1) return;
                 await api.post('/robot/turn', { degrees: -x * 15 });

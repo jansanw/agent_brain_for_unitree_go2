@@ -49,6 +49,8 @@ class _IgnoreDataChannelMessages(logging.Filter):
         msg = record.getMessage()
         if "Received message on data channel" in msg:
             return False
+        if "Receiving audio frame" in msg:
+            return False
         if "/robot/state" in msg or "/robot/camera" in msg:
             return False
         return True
