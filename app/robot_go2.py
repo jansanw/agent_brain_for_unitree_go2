@@ -48,7 +48,7 @@ try:
         UnitreeWebRTCConnection,
         WebRTCConnectionMethod,
     )
-    from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD, MCF_CMD
+    from unitree_webrtc_connect.constants import RTC_TOPIC, SPORT_CMD, SPORT_CMD as MCF_CMD
 except ImportError:
     print("ERROR: unitree_webrtc_connect not installed.")
     raise
@@ -415,7 +415,17 @@ class RobotController:
             return True, "Connected successfully"
             
         except Exception as e:
+            # 完全清理连接状态
+            if self._conn is not None:
+                try:
+                    await self._conn.disconnect()
+                except Exception:
+                    pass
             self._conn = None
+            self._sport_state = {}
+            self._low_state = {}
+            self._latest_frame_jpg = None
+            self._latest_frame_ts = 0.0
             logger.error(f"Connection error: {e}")
             return False, f"Connection failed: {str(e)}"
     

@@ -627,7 +627,7 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception as e:
                 logger.debug(f"Error getting camera: {e}")
             
-            await asyncio.sleep(0.05)  # ~20 FPS
+            await asyncio.sleep(0.4)  # ~20 FPS
             
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)

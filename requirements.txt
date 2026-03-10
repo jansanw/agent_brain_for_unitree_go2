@@ -1,13 +1,12 @@
 # Core dependencies
-mcp
-mcp[cli]
-git+https://github.com/jrcichra/unitree_webrtc_connect.git@justin
+git+https://github.com/jansanw/unitree_webrtc_connect.git@master
 uvicorn
 starlette
 opencv-python-headless
 numpy
 pillow
 fastapi
+python-multipart
 python-dotenv
 httpx
 

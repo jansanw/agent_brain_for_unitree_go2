@@ -912,19 +912,21 @@ const app = createApp({
                     const msg = JSON.parse(event.data);
                     
                     if (msg.type === 'connected') {
-                        connected.value = msg.data;
+                        // 后端发送的连接状态，但需要进一步验证
+                        if (msg.data === false) {
+                            connected.value = false;
+                        }
+                        // 如果是 true，等待 state 数据验证
                     } else if (msg.type === 'state') {
                         robotState.value = msg.data;
-                        // If we receive valid state data, robot is connected
-                        if (msg.data && msg.data.battery_pct !== undefined) {
+                        // 通过 battery_pct > 0 判断是否真正连接成功
+                        if (msg.data && msg.data.battery_pct > 0) {
                             connected.value = true;
+                        } else {
+                            connected.value = false;
                         }
                     } else if (msg.type === 'camera') {
                         cameraImage.value = msg.data;
-                        // If we receive camera data, robot is connected
-                        if (msg.data) {
-                            connected.value = true;
-                        }
                     }
                 } catch (e) {
                     console.error('WebSocket message error:', e);
@@ -968,11 +970,15 @@ const app = createApp({
                 });
                 if (res.success) {
                     showConnectModal.value = false;
+                    showToast('连接成功', 'success');
+                    // 等待 WebSocket 确认连接状态
                 } else {
-                    alert('连接失败: ' + res.message);
+                    showToast('连接失败: ' + res.message, 'error');
+                    connected.value = false;
                 }
             } catch (e) {
-                alert('连接错误: ' + e.message);
+                showToast('连接错误: ' + e.message, 'error');
+                connected.value = false;
             } finally {
                 connecting.value = false;
             }
