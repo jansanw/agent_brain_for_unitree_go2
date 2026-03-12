@@ -17,9 +17,11 @@ import base64
 import json
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from typing import Optional
 
+import uvicorn
 from fastapi import FastAPI, HTTPException, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -206,20 +208,20 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class ConnectionManager:
     """Manages WebSocket connections for real-time data streaming."""
-    
+
     def __init__(self):
         self.active_connections: list[WebSocket] = []
-    
+
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
         logger.info(f"WebSocket connected. Total: {len(self.active_connections)}")
-    
+
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
         logger.info(f"WebSocket disconnected. Total: {len(self.active_connections)}")
-    
+
     async def broadcast(self, message: dict):
         """Broadcast message to all connected clients."""
         for connection in self.active_connections[:]:  # Copy to avoid modification during iteration
@@ -230,7 +232,6 @@ class ConnectionManager:
 
 
 ws_manager = ConnectionManager()
-
 
 # ---------------------------------------------------------------------------
 # Chat History
@@ -482,17 +483,17 @@ _voice_assistant: Optional[VoiceAssistant] = None
 async def voice_start(request: VoiceStartRequest = VoiceStartRequest()):
     """Start voice conversation mode."""
     global _voice_assistant
-    
+
     c = get_controller()
     if not c.connected:
         raise HTTPException(503, "Robot not connected")
-    
+
     if get_client() is None:
         raise HTTPException(500, "LLM client not initialized. Set OPENAI_API_KEY.")
-    
+
     if _voice_assistant is not None and _voice_assistant.is_running:
         return VoiceStatusResponse(running=True, state=_voice_assistant.state.value, message="Already running")
-    
+
     # Create new voice assistant
     _voice_assistant = VoiceAssistant(
         model=request.model,
@@ -500,41 +501,41 @@ async def voice_start(request: VoiceStartRequest = VoiceStartRequest()):
         min_speech_ms=request.min_speech_ms,
         include_image=request.include_image,
     )
-    
+
     # Set up callbacks for WebSocket broadcasting
     def on_state_change(state: AssistantState):
         asyncio.create_task(ws_manager.broadcast({
             "type": "voice_state",
             "data": state.value
         }))
-    
+
     def on_transcript(text: str):
         asyncio.create_task(ws_manager.broadcast({
             "type": "voice_transcript",
             "data": text
         }))
-    
+
     def on_response(text: str):
         asyncio.create_task(ws_manager.broadcast({
             "type": "voice_response",
             "data": text
         }))
-    
+
     def on_tool_call(tool: str, args: dict, result: str):
         asyncio.create_task(ws_manager.broadcast({
             "type": "voice_tool_call",
             "data": {"tool": tool, "arguments": args, "result": result}
         }))
-    
+
     _voice_assistant.on_state_change(on_state_change)
     _voice_assistant.on_transcript(on_transcript)
     _voice_assistant.on_response(on_response)
     _voice_assistant.on_tool_call(on_tool_call)
-    
+
     success = await _voice_assistant.start()
     if not success:
         raise HTTPException(500, "Failed to start voice assistant")
-    
+
     return VoiceStatusResponse(running=True, state=_voice_assistant.state.value, message="Voice assistant started")
 
 
@@ -542,14 +543,14 @@ async def voice_start(request: VoiceStartRequest = VoiceStartRequest()):
 async def voice_stop():
     """Stop voice conversation mode."""
     global _voice_assistant
-    
+
     if _voice_assistant is None or not _voice_assistant.is_running:
         return VoiceStatusResponse(running=False, state="idle", message="Not running")
-    
+
     await _voice_assistant.stop()
     state = _voice_assistant.state.value
     _voice_assistant = None
-    
+
     return VoiceStatusResponse(running=False, state=state, message="Voice assistant stopped")
 
 
@@ -557,10 +558,10 @@ async def voice_stop():
 async def voice_status():
     """Get voice assistant status."""
     global _voice_assistant
-    
+
     if _voice_assistant is None or not _voice_assistant.is_running:
         return VoiceStatusResponse(running=False, state="idle", message="Not running")
-    
+
     return VoiceStatusResponse(running=True, state=_voice_assistant.state.value)
 
 
@@ -568,12 +569,12 @@ async def voice_status():
 async def voice_interrupt():
     """Interrupt current TTS playback."""
     global _voice_assistant
-    
+
     if _voice_assistant is None or not _voice_assistant.is_running:
         return VoiceStatusResponse(running=False, state="idle", message="Not running")
-    
+
     _voice_assistant.interrupt()
-    
+
     return VoiceStatusResponse(running=True, state=_voice_assistant.state.value, message="Interrupted")
 
 
@@ -581,10 +582,10 @@ async def voice_interrupt():
 async def voice_clear_history():
     """Clear voice assistant chat history."""
     global _voice_assistant
-    
+
     if _voice_assistant is not None:
         _voice_assistant.clear_history()
-    
+
     return {"message": "Voice history cleared"}
 
 
@@ -602,25 +603,25 @@ async def websocket_endpoint(websocket: WebSocket):
     """
     await ws_manager.connect(websocket)
     c = get_controller()
-    
+
     try:
         # Send initial connection status
         await websocket.send_json({"type": "connected", "data": c.connected})
-        
+
         while True:
             if not c.connected:
                 # Robot not connected, wait and retry
                 await websocket.send_json({"type": "connected", "data": False})
                 await asyncio.sleep(1)
                 continue
-            
+
             # Send robot state
             try:
                 state = c.get_state()
                 await websocket.send_json({"type": "state", "data": state})
             except Exception as e:
                 logger.debug(f"Error getting state: {e}")
-            
+
             # Send camera frame
             try:
                 frame = c.get_camera_frame(quality=60)
@@ -628,9 +629,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json({"type": "camera", "data": frame})
             except Exception as e:
                 logger.debug(f"Error getting camera: {e}")
-            
+
             await asyncio.sleep(0.4)  # ~20 FPS
-            
+
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
     except Exception as e:
@@ -656,8 +657,34 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     args = parse_args()
     app.state.args = args
-    uvicorn.run(app, host=args.host, port=args.port)
+
+    HOST = args.host
+    PORT = args.port
+
+    # Check if running in debug mode using multiple methods
+    debuggers = {'pydevd', 'debugpy', 'pdb'}  # 常见调试模块
+    is_idea_debug = any(mod in sys.modules for mod in debuggers)
+
+    """
+        启动 Uvicorn 服务器，自动处理调试模式下的事件循环冲突。
+    """
+    if is_idea_debug:
+        # 调试模式下手动创建服务器，避免 uvicorn.run() 内部的事件循环问题
+        config = uvicorn.Config(app, host=HOST, port=PORT, log_level="info")
+        server = uvicorn.Server(config)
+
+        # 尝试获取当前运行的事件循环
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # 没有运行中的循环，创建新循环并设置为当前事件循环
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        # 在循环中运行服务器
+        loop.run_until_complete(server.serve())
+    else:
+        # 正常模式直接使用 uvicorn.run
+        uvicorn.run(app, host=HOST, port=PORT)
